@@ -1,14 +1,16 @@
 #!/bin/bash
 set -ex
 
-CONTAINER_IP=172.17.0.10
-HOST_GW=172.17.0.1
+CONTAINER_IP=10.1.2.10
+HOST_GW=10.1.2.1
+NETMASK=24
+NET=10.1.2.0/${NETMASK}
 PUBLIC_PORT=8080
 HOST_PUBLIC_PORT=8088
 CONTAINER_ID=001
 
 echo "Show all interfaces"
-ip link show
+ip -br link show
 echo "Show all network NS"
 ip netns list
 
@@ -19,19 +21,19 @@ ip link set cveth${CONTAINER_ID} netns cont${CONTAINER_ID})
 
 echo "Add linux bridge"
 ip link show br0 || ip link add br0 type bridge
-ip link set br${CONTAINER_ID} up
+ip link set br0 up
 ip link set veth${CONTAINER_ID} master br0
 
 nsenter --net=/run/netns/cont${CONTAINER_ID} ip -br link list
 nsenter --net=/run/netns/cont${CONTAINER_ID} ip link set up lo
 nsenter --net=/run/netns/cont${CONTAINER_ID} ip link set up cveth${CONTAINER_ID}
-nsenter --net=/run/netns/cont${CONTAINER_ID} ip addr add ${CONTAINER_IP}/24 dev cveth${CONTAINER_ID}
+nsenter --net=/run/netns/cont${CONTAINER_ID} ip addr add ${CONTAINER_IP}/${NETMASK} dev cveth${CONTAINER_ID}
 nsenter --net=/run/netns/cont${CONTAINER_ID} ip route show
 ip link set veth${CONTAINER_ID} up
-ip addr add ${HOST_GW}/24 dev veth${CONTAINER_ID}
-ip addr show -br veth${CONTAINER_ID}
+ip addr add ${HOST_GW}/${NETMASK} dev veth${CONTAINER_ID}
+ip -br addr show veth${CONTAINER_ID}
 # Add NAT
-iptables -t nat -A POSTROUTING -s 172.17.0.0/24 ! -o veth${CONTAINER_ID} -j MASQUERADE
+iptables -t nat -A POSTROUTING -s ${NET} ! -o veth${CONTAINER_ID} -j MASQUERADE
 
 # public port 
 iptables -t nat -A PREROUTING -d ${CONTAINER_IP} -p tcp -m tcp --dport 5000 \
